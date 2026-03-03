@@ -1,0 +1,14 @@
+alias: Dockmon Alert
+description: Receives webhook from Dockmon and forwards as iOS push notification
+trigger:
+  - platform: webhook
+    webhook_id: dockmon_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - service: notify.mobile_app_skank
+    data:
+      title: "{{ trigger.json.title | default('Dockmon Alert') }}"
+      message: "{{ trigger.json.message | default('A container event occurred') }}"
+mode: single
