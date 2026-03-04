@@ -1,0 +1,31 @@
+alias: Dispatcharr Webhook
+description: >
+  Handles Dispatcharr notifications.
+  Expects {title, message, severity} — falls back gracefully if fields are missing.
+trigger:
+  - platform: webhook
+    webhook_id: dispatcharr_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      severity: "{{ trigger.json.severity | default('info') | lower }}"
+      title: "{{ trigger.json.title | default('Dispatcharr') }}"
+      message: "{{ trigger.json.message | default(trigger.json.body | default('')) }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ severity in ['critical', 'warning'] }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[Dispatcharr] {{ title }}"
+              message: "{{ message }}"
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "[Dispatcharr] {{ title }}"
+          message: "{{ message }}"
+mode: queued
+max: 10

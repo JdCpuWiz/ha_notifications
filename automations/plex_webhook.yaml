@@ -1,0 +1,42 @@
+alias: Plex Webhook
+description: >
+  Handles direct Plex webhooks (requires Plex Pass).
+  Plex sends multipart/form-data — payload JSON is in trigger.data.payload.
+  Prefer Tautulli for richer metadata; use this as a complement or standalone.
+trigger:
+  - platform: webhook
+    webhook_id: plex_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      payload: "{{ trigger.data.payload | from_json }}"
+  - variables:
+      event: "{{ payload.event | default('') }}"
+      media_type: "{{ payload.Metadata.type | default('') }}"
+      title: "{{ payload.Metadata.title | default('') }}"
+      show: "{{ payload.Metadata.grandparentTitle | default('') }}"
+      user: "{{ payload.Account.title | default('Someone') }}"
+      player: "{{ payload.Player.title | default('') }}"
+  - variables:
+      friendly_title: >
+        {% if media_type == 'episode' %}{{ show }} – {{ title }}
+        {% elif media_type in ['movie', 'track'] %}{{ title }}
+        {% else %}{{ title }}{% endif %}
+      action_verb: >
+        {% if event == 'media.play' %}started watching
+        {% elif event == 'media.pause' %}paused
+        {% elif event == 'media.resume' %}resumed
+        {% elif event == 'media.stop' %}stopped watching
+        {% elif event == 'media.scrobble' %}finished watching
+        {% else %}{{ event }}{% endif %}
+  - condition: template
+    value_template: "{{ event in ['media.play', 'media.stop', 'media.scrobble'] }}"
+  - service: persistent_notification.create
+    data:
+      title: "[Plex] {{ user }} {{ action_verb }}"
+      message: >
+        {{ friendly_title }}{% if player %} on {{ player }}{% endif %}
+mode: queued
+max: 10

@@ -1,0 +1,43 @@
+alias: NZBGet Notify
+description: >
+  Receives download completion events from NZBGet via a post-process script.
+  Failures → push notification. Success → persistent HA notification.
+  See scripts/nzbget_notify.sh for the companion script.
+trigger:
+  - platform: webhook
+    webhook_id: nzbget_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      status: "{{ trigger.json.status | default('') | upper }}"
+      nzbname: "{{ trigger.json.nzbname | default('Unknown') }}"
+      category: "{{ trigger.json.category | default('') }}"
+      message: "{{ trigger.json.message | default('') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ status == 'FAILURE' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[NZBGet] Download Failed"
+              message: >
+                {{ nzbname }}{% if category %} ({{ category }}){% endif %}{% if message %}: {{ message }}{% endif %}
+      - conditions:
+          - condition: template
+            value_template: "{{ status == 'SUCCESS' }}"
+        sequence:
+          - service: persistent_notification.create
+            data:
+              title: "[NZBGet] Download Complete"
+              message: >
+                {{ nzbname }}{% if category %} ({{ category }}){% endif %}
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "[NZBGet] {{ status | capitalize }}"
+          message: "{{ nzbname }}"
+mode: queued
+max: 10

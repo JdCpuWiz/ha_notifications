@@ -1,0 +1,41 @@
+alias: Tautulli Webhook
+description: >
+  Handles Plex play/stop/watched events via Tautulli.
+  Tautulli is preferred over direct Plex webhooks for richer metadata.
+  Only notifies on play, stop, and watched events (not pause/resume) to reduce noise.
+trigger:
+  - platform: webhook
+    webhook_id: tautulli_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      action: "{{ trigger.json.action | default('') }}"
+      user: "{{ trigger.json.user | default('Someone') }}"
+      title: "{{ trigger.json.title | default('') }}"
+      media_type: "{{ trigger.json.media_type | default('') }}"
+      show: "{{ trigger.json.grandparent_title | default('') }}"
+      player: "{{ trigger.json.player | default('') }}"
+  - variables:
+      friendly_title: >
+        {% if media_type == 'episode' %}{{ show }} – {{ title }}
+        {% elif media_type == 'movie' %}{{ title }}
+        {% elif media_type == 'track' %}{{ trigger.json.grandparent_title | default('') }} – {{ title }}
+        {% else %}{{ title }}{% endif %}
+      action_verb: >
+        {% if action == 'play' %}started watching
+        {% elif action == 'pause' %}paused
+        {% elif action == 'resume' %}resumed
+        {% elif action == 'stop' %}stopped watching
+        {% elif action == 'watched' %}finished watching
+        {% else %}{{ action }}{% endif %}
+  - condition: template
+    value_template: "{{ action in ['play', 'stop', 'watched'] }}"
+  - service: persistent_notification.create
+    data:
+      title: "[Plex] {{ user }} {{ action_verb }}"
+      message: >
+        {{ friendly_title }}{% if player %} on {{ player }}{% endif %}
+mode: queued
+max: 10

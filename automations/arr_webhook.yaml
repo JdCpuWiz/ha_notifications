@@ -1,0 +1,85 @@
+alias: Arr Stack Webhook
+description: >
+  Handles webhooks from Sonarr, Radarr, Lidarr, Readarr, Prowlarr.
+  All arr apps share this single webhook endpoint.
+  Health issues → push. Downloads → persistent. Grabs → persistent. Test → push.
+trigger:
+  - platform: webhook
+    webhook_id: arr_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      event_type: "{{ trigger.json.eventType | default('') }}"
+      source: "{{ trigger.json.instanceName | default('Arr') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type == 'Test' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] Test notification"
+              message: "Webhook connection successful"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type == 'Health' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] Health Issue"
+              message: "{{ trigger.json.message | default('Health check failed') }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type == 'HealthRestored' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] Health Restored"
+              message: "{{ trigger.json.message | default('Health check recovered') }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type in ['Download', 'MovieAdded', 'AlbumDownload', 'BookDownload'] }}"
+        sequence:
+          - variables:
+              media_title: >
+                {% if trigger.json.series is defined %}{{ trigger.json.series.title }}
+                {% elif trigger.json.movie is defined %}{{ trigger.json.movie.title }}
+                {% elif trigger.json.artist is defined %}{{ trigger.json.artist.artistName }}
+                {% elif trigger.json.book is defined %}{{ trigger.json.book.title }}
+                {% else %}Unknown{% endif %}
+              upgrade_text: "{{ ' (Upgrade)' if trigger.json.isUpgrade | default(false) else '' }}"
+          - service: persistent_notification.create
+            data:
+              title: "[{{ source }}] Downloaded{{ upgrade_text }}"
+              message: "{{ media_title }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type == 'Grab' }}"
+        sequence:
+          - variables:
+              media_title: >
+                {% if trigger.json.series is defined %}{{ trigger.json.series.title }}
+                {% elif trigger.json.movie is defined %}{{ trigger.json.movie.title }}
+                {% else %}Unknown{% endif %}
+          - service: persistent_notification.create
+            data:
+              title: "[{{ source }}] Grabbed"
+              message: "{{ media_title }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event_type == 'ApplicationUpdate' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] App Updated"
+              message: "{{ trigger.json.message | default('Application updated successfully') }}"
+
+mode: queued
+max: 10

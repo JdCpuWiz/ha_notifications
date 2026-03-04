@@ -1,0 +1,48 @@
+alias: Generic Alert Webhook
+description: >
+  Standard catch-all webhook for any service that can POST a structured payload.
+  Payload: {title, message, severity (critical|warning|info), source}
+  Routing: critical → push + persistent | warning → push | info → persistent only
+trigger:
+  - platform: webhook
+    webhook_id: generic_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      severity: "{{ trigger.json.severity | default('info') | lower }}"
+      title: "{{ trigger.json.title | default('Alert') }}"
+      message: "{{ trigger.json.message | default('') }}"
+      source: "{{ trigger.json.source | default('unknown') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ severity == 'critical' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data:
+                push:
+                  interruption-level: critical
+          - service: persistent_notification.create
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}\n\n_Source: {{ source }}_"
+      - conditions:
+          - condition: template
+            value_template: "{{ severity == 'warning' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}\n\n_Source: {{ source }}_"
+mode: queued
+max: 10

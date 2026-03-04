@@ -1,0 +1,35 @@
+alias: SABnzbd Notify
+description: >
+  Receives download events from SABnzbd via notification script.
+  Failures → push notification. Success → persistent HA notification.
+  See scripts/sabnzbd_notify.sh for the companion script.
+trigger:
+  - platform: webhook
+    webhook_id: sabnzbd_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      status: "{{ trigger.json.status | default('') | lower }}"
+      nzbname: "{{ trigger.json.nzbname | default(trigger.json.name | default('Unknown')) }}"
+      category: "{{ trigger.json.category | default('') }}"
+      message: "{{ trigger.json.message | default('') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ 'fail' in status or status == 'failed' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[SABnzbd] Download Failed"
+              message: >
+                {{ nzbname }}{% if category %} ({{ category }}){% endif %}{% if message %}: {{ message }}{% endif %}
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "[SABnzbd] Download Complete"
+          message: >
+            {{ nzbname }}{% if category %} ({{ category }}){% endif %}
+mode: queued
+max: 10

@@ -1,0 +1,52 @@
+alias: Proxmox Alert
+description: >
+  Handles webhooks from all 3 Proxmox servers.
+  Configure each PVE node to POST here — include "source" in body template to identify host.
+  Maps Proxmox severity "error" → "critical".
+trigger:
+  - platform: webhook
+    webhook_id: proxmox_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      severity_raw: "{{ trigger.json.severity | default('info') | lower }}"
+      severity: >
+        {% if severity_raw == 'error' %}critical
+        {% elif severity_raw in ['warning', 'critical', 'info'] %}{{ severity_raw }}
+        {% else %}info{% endif %}
+      title: "{{ trigger.json.title | default('Proxmox Alert') }}"
+      message: "{{ trigger.json.message | default('') }}"
+      source: "{{ trigger.json.source | default('proxmox') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ severity == 'critical' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] {{ title }}"
+              message: "{{ message }}"
+              data:
+                push:
+                  interruption-level: critical
+          - service: persistent_notification.create
+            data:
+              title: "[{{ source }}] {{ title }}"
+              message: "{{ message }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ severity == 'warning' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[{{ source }}] {{ title }}"
+              message: "{{ message }}"
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "[{{ source }}] {{ title }}"
+          message: "{{ message }}"
+mode: queued
+max: 10

@@ -1,0 +1,28 @@
+alias: Frigate Alert
+description: >
+  Notifies on Frigate camera detections via MQTT.
+  Requires MQTT integration in HA and Frigate publishing to frigate/events.
+  Only fires on new, confirmed (non-false-positive) detections.
+trigger:
+  - platform: mqtt
+    topic: frigate/events
+action:
+  - variables:
+      event_type: "{{ trigger.payload_json.type | default('') }}"
+      camera: "{{ trigger.payload_json.after.camera | default(trigger.payload_json.before.camera | default('unknown')) }}"
+      label: "{{ trigger.payload_json.after.label | default(trigger.payload_json.before.label | default('unknown')) }}"
+      score: "{{ ((trigger.payload_json.after.score | default(0)) * 100) | round(0) | int }}"
+      is_false_positive: "{{ trigger.payload_json.after.false_positive | default(false) }}"
+  - condition: template
+    value_template: "{{ event_type == 'new' and not is_false_positive }}"
+  - service: notify.mobile_app_skank
+    data:
+      title: "Frigate: {{ label | capitalize }} detected"
+      message: >
+        {{ label | capitalize }} on {{ camera | replace('_', ' ') | title }}
+        ({{ score }}% confidence)
+      data:
+        push:
+          interruption-level: time-sensitive
+mode: queued
+max: 20

@@ -1,0 +1,45 @@
+alias: Seerr Webhook
+description: >
+  Handles Overseerr / Jellyseerr media request notifications.
+  Covers pending, approved, available, declined, and failed request states.
+trigger:
+  - platform: webhook
+    webhook_id: seerr_alert
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      notification_type: "{{ trigger.json.notification_type | default('') }}"
+      subject: "{{ trigger.json.subject | default('') }}"
+      message: "{{ trigger.json.message | default('') }}"
+      requested_by: "{{ trigger.json.request.requestedBy_username | default('') }}"
+      media_type: "{{ trigger.json.media.media_type | default('') | capitalize }}"
+  - variables:
+      friendly_type: >
+        {% if notification_type == 'MEDIA_PENDING' %}Pending Approval
+        {% elif notification_type == 'MEDIA_APPROVED' %}Approved
+        {% elif notification_type == 'MEDIA_AVAILABLE' %}Now Available
+        {% elif notification_type == 'MEDIA_DECLINED' %}Declined
+        {% elif notification_type == 'MEDIA_FAILED' %}Failed
+        {% elif notification_type == 'TEST_NOTIFICATION' %}Test
+        {% else %}{{ notification_type | replace('_', ' ') | title }}{% endif %}
+      push_events: "{{ notification_type in ['MEDIA_AVAILABLE', 'MEDIA_DECLINED', 'MEDIA_FAILED', 'TEST_NOTIFICATION'] }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ push_events }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[Seerr] {{ media_type }} {{ friendly_type }}"
+              message: >
+                {{ subject }}{% if requested_by %} — {{ requested_by }}{% endif %}
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "[Seerr] {{ media_type }} {{ friendly_type }}"
+          message: >
+            {{ subject }}{% if requested_by %} — {{ requested_by }}{% endif %}
+mode: queued
+max: 10
