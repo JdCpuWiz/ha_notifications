@@ -1,7 +1,11 @@
 # Proxmox Setup
 
-Proxmox 8.1+ has a built-in notification system with native webhook support.
+Proxmox 9.x has a built-in notification system with native webhook support.
 Configure each of your 3 nodes separately — use the `source` field to identify them.
+
+> **Note:** PVE 9 uses Handlebars templates. Do NOT include `message` in the body template —
+> Proxmox notification messages contain newlines which break JSON parsing in HA.
+> Title + severity is sufficient.
 
 ## Webhook Endpoint (per node)
 
@@ -18,10 +22,11 @@ Configure each of your 3 nodes separately — use the `source` field to identify
 Content-Type: application/json
 ```
 
-**Body template** (adjust `source` per node — pve1, pve2, pve3):
-```
-{"title":"{{ title }}","message":"{{ message }}","severity":"{{ severity }}","source":"pve1"}
-```
+**Body template** (adjust `source` per node — omit `message` due to Handlebars/newline issue):
+
+- pve: `{"title":"{{title}}","severity":"{{severity}}","source":"pve"}`
+- pve2: `{"title":"{{title}}","severity":"{{severity}}","source":"pve2"}`
+- pve3: `{"title":"{{title}}","severity":"{{severity}}","source":"pve3"}`
 
 ## Notification Matcher
 
