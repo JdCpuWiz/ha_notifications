@@ -15,8 +15,8 @@ action:
       ping_ms: "{{ trigger.json.data.ping | default(0) | float }}"
       server_name: "{{ trigger.json.data.server_name | default('') }}"
       # Adjust these thresholds to match your ISP plan
-      download_threshold: 100
-      upload_threshold: 20
+      download_threshold: 250
+      upload_threshold: 250
   - condition: template
     value_template: "{{ download_mbps < download_threshold or upload_mbps < upload_threshold }}"
   - service: notify.mobile_app_skank
