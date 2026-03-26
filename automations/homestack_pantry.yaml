@@ -1,0 +1,40 @@
+alias: HomeStack Pantry Webhook
+description: >
+  Receives stock events from HomeStack pantry/kiosk scanning.
+  Events: out_of_stock (qty hit 0), added_to_grocery (auto-added to shopping list).
+  Payload: { event, product, quantity, store? }
+trigger:
+  - platform: webhook
+    webhook_id: homestack_pantry
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      event: "{{ trigger.json.event | default('') }}"
+      product: "{{ trigger.json.product | default('Unknown item') }}"
+      quantity: "{{ trigger.json.quantity | default(0) }}"
+      store: "{{ trigger.json.store | default('') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ event == 'out_of_stock' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[HomeStack] Out of Stock"
+              message: "{{ product }} is now out of stock"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ event == 'added_to_grocery' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "[HomeStack] Added to Grocery List"
+              message: >
+                {{ product }} added to
+                {% if store %}{{ store }} list{% else %}grocery list{% endif %}
+                ({{ quantity }} remaining)
+mode: queued
+max: 10
