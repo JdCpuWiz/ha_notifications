@@ -1,0 +1,41 @@
+alias: Pawzitive Backup Webhook
+description: >
+  Receives job completion/failure notifications from Pawzitive Backup.
+  Payload: {title, message, status (success|failed)}
+  Routing: success → persistent notification | failed → push + persistent
+trigger:
+  - platform: webhook
+    webhook_id: pawzitive_backup
+    allowed_methods:
+      - POST
+    local_only: true
+action:
+  - variables:
+      status: "{{ trigger.json.status | default('success') | lower }}"
+      title: "{{ trigger.json.title | default('Pawzitive Backup') }}"
+      message: "{{ trigger.json.message | default('') }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ status == 'failed' }}"
+        sequence:
+          - service: notify.mobile_app_skank
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data:
+                push:
+                  interruption-level: time-sensitive
+          - service: persistent_notification.create
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              notification_id: pawzitive_backup_failure
+    default:
+      - service: persistent_notification.create
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          notification_id: pawzitive_backup_success
+mode: queued
+max: 10
